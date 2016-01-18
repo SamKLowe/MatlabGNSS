@@ -3,9 +3,10 @@
 %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clear, clc;
+SIG2NOISE_RATIO = 10;
 INTEGRAL_ITERATIONS = 5; %increase to increase the effect of the low pass filter
 SAMPLE_RATE_MULT = 2; % default rate is 10 samples per period
-PHI_INIT = 4;   % this number * pi/2
+PHI_INIT = 5;   % this number * pi/2
 START_PHI = (pi/(5*SAMPLE_RATE_MULT)) * PHI_INIT; %used to initialize 
 
 SAMPLES = 500; % amount of samples to use
@@ -58,6 +59,7 @@ SampLen = length(cwSamp);
 
 input = cwWave.*cwSamp;
 
+input = awgn(input, SIG2NOISE_RATIO);
 
 
 
