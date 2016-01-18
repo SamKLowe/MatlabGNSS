@@ -5,7 +5,7 @@
 clear, clc;
 INTEGRAL_ITERATIONS = 5; %increase to increase the effect of the low pass filter
 SAMPLE_RATE_MULT = 2; % default rate is 10 samples per period
-PHI_INIT = 1;   % this number * pi/2
+PHI_INIT = 4;   % this number * pi/2
 START_PHI = (pi/(5*SAMPLE_RATE_MULT)) * PHI_INIT; %used to initialize 
 
 SAMPLES = 500; % amount of samples to use
@@ -15,7 +15,7 @@ EXTRA_SAMPLES = (5*SAMPLE_RATE_MULT) - PHI_INIT; %used for phase offset
 %in future can add a function that builds this
 %cw = [0 1]; %20
 %cw = [1 0 1 0 1 0 1 1 0 0]; %100
-cw = [1 0 1 0 1 0 1 1 0 0 1 1 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0]; % 500
+cw = [1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0]; % 500
 
 BITS = length(cw);
 %create a square wave to multiply with the sine carrier
@@ -118,8 +118,8 @@ phi = 0;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%MAIN LOOP
 % the range is weird because we need to make room for the phase offset
-for inc = (ceil(SAMPLES / 7):SAMPLES - ceil(SAMPLES / 7))
-    
+% for inc = (ceil(SAMPLES / 10):SAMPLES - ceil(SAMPLES / 10))
+for inc = (5*SAMPLE_RATE_MULT:SAMPLES - (5*SAMPLE_RATE_MULT))    
     
     %---------------------------------------------------------------------- 
 
