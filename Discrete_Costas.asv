@@ -5,7 +5,7 @@
 clear, clc;
 
 %%%%%%%%%%%%%%%%%%%%%%%% Adjustments
-SIG2NOISE_RATIO = 2; % decrease to add more noise
+SIG2NOISE_RATIO = ; % decrease to add more noise
 INTEGRAL_ITERATIONS = 7; %increase to increase the effect of the low pass filter
 SAMPLE_RATE_MULT = 2; % default rate is 10 samples per period
 PHI_INIT = 2;   % this number * pi/2
