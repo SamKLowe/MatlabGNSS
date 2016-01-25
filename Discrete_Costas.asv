@@ -5,20 +5,21 @@
 clear, clc;
 
 %%%%%%%%%%%%%%%%%%%%%%%% Adjustments
-SIG2NOISE_RATIO = 0; % decrease to add more noise
-INTEGRAL_ITERATIONS = 5; %increase to increase the effect of the low pass filter
+SIG2NOISE_RATIO = -3; % decrease to add more noise
+INTEGRAL_ITERATIONS = 7; %increase to increase the effect of the low pass filter
 SAMPLE_RATE_MULT = 2; % default rate is 10 samples per period
-PHI_INIT = 4;   % this number * pi/2
+PHI_ADJUST = 4; %must do some extra stuff to it to turn it into a cos wave
+PHI_INIT = PHI_ADJUST - 5;   % this number * pi/2
 START_PHI = (pi/(5*SAMPLE_RATE_MULT)) * PHI_INIT; %used to initialize 
 
-SAMPLES = 1000; % amount of samples to use
-EXTRA_SAMPLES = (5*SAMPLE_RATE_MULT) - PHI_INIT; %used for phase offset
+SAMPLES = 2000; % amount of samples to use
+EXTRA_SAMPLES = (5*SAMPLE_RATE_MULT) - (5+PHI_INIT); %used for phase offset
 
 %C/A arrays to use for various samples
 %in future can add a function that builds this
 %cw = [0 1]; %20
 %cw = [1 0 1 0 1 0 1 1 0 0]; %100
-cw = [1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0 1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0]; % 500
+cw = [1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0 1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 1 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0 1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0 1 1 1 1 1 1 1 1 1 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0]; % 500
 
 BITS = length(cw);
 
@@ -48,7 +49,7 @@ SAMPLE_FREQUENCY = 10230000;
 carrier = dsp.SineWave();
 carrier.Frequency = SAMPLE_FREQUENCY;
 carrier.Amplitude = 1;
-carrier.PhaseOffset = START_PHI;
+carrier.PhaseOffset = START_PHI+5;
 carrier.SamplesPerFrame = 5*SAMPLE_RATE_MULT*BITS + EXTRA_SAMPLES;
 carrier.SampleRate = SAMPLE_FREQUENCY*SAMPLE_RATE_MULT*10;
 carrier.OutputDataType = 'single';
@@ -62,8 +63,10 @@ WaveLen = length(cwWave);
 SampLen = length(cwSamp);
 
 input = cwWave.*cwSamp;
+input_clean = input;
 
 input = awgn(input, SIG2NOISE_RATIO);
+Mag_Noise = 1/db2mag((SIG2NOISE_RATIO))
 
 
 s1 = zeros(SAMPLES);
@@ -109,9 +112,9 @@ previous_error = 0;
 integral = 0;
 derivative = 0;
 output = 0;
-Ki = 3000000;
-Kd = 0;
-Kp = 1;
+Ki = 4000000;   % divided by 1.024 Million (dt)
+Kd = .00000002; % multiplied by 1.024 Million (dt)
+Kp = 2;
 dt = 1/(SAMPLE_FREQUENCY*SAMPLE_RATE_MULT);
 
 %phase variable
@@ -126,6 +129,7 @@ for inc = (20*SAMPLE_RATE_MULT:SAMPLES - (20*SAMPLE_RATE_MULT))
 % -----------------------LOOP FILTER (CONTROL LOOP)-----------------------
 %PID controller
 
+% Using style from Wikipedia https://en.wikipedia.org/wiki/PID_controller
 % previous_error = 0
 % integral = 0 
 % start:
@@ -139,22 +143,17 @@ for inc = (20*SAMPLE_RATE_MULT:SAMPLES - (20*SAMPLE_RATE_MULT))
     
     pidY1 = y1(inc-1);    
     pidY2 = y2(inc-1);
-    test1 = pidY1(1)*pidY2(1);
-    error = test1(1)
+    error = pidY1*pidY2;
     
-    %hard pid still need to tune
     errors(inc) = error;
-    integral = integral + (error * dt)
+    integral = integral + (error * dt);
     derivative = (error - previous_error)/dt;
-    output = (Kp*error + Ki*integral + Kd*derivative)
+    output = (Kp*error + Ki*integral + Kd*derivative);
     previous_error = error;
-    if error > .1
-        if phi < 0
-            phi = ceil(output)
-        else
-            phi = floor(output)
-        end
-    end
+    phi = round(output);
+%     if abs(error) > .1
+%         phi = round(output);        
+%     end
     
     
     
@@ -216,36 +215,45 @@ for inc = (20*SAMPLE_RATE_MULT:SAMPLES - (20*SAMPLE_RATE_MULT))
     bit1(inc) = sign(y1(inc));
 end
 
+% -----------------------XOR With Gold Codes-------------------------------
+
+
+
 
 
 % -----------------------PLOTS------------------------------------
 subplot(2,2,1)
 %figure(1)
-plot(bit1(501:750));
-title('Base Sine Wave');
+stem(input_clean(1701:1850));
+title('Ideal Input');
 xlabel('time in sample intervals');
 ylabel('Amplitude');
 subplot(2,2,2);
 %figure(2)
-stem(input(501:750));
-hold
+stem(input(1701:1850));
 title('The input to our receiver');
 xlabel('time in sample intervals');
 ylabel('Amplitude');
 subplot(2,2,3);
 %figure(3)
-stem(y1(501:750))
+stem(y1(1701:1850));
+hold on;
+plot(bit1(1701:1850));
+hold off;
 title('Output Waveform');
 xlabel('time in sample intervals');
 ylabel('Amplitude');
 subplot(2,2,4);
-plot(phis(1:length(phis)))
+plot(phis(1:length(phis)-((20*SAMPLE_RATE_MULT))))
+hold on;
+plot(errors(1:length(phis)-((20*SAMPLE_RATE_MULT))));
+hold off;
 title('Phase of the System');
 xlabel('time in sample intervals');
 ylabel('phi');
 
 % print out the final phase
-final_phi = phi % * pi/5
+final_phi = phis(length(phis)-((20*SAMPLE_RATE_MULT))) % * pi/5
 
 
 
