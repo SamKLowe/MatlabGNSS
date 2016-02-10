@@ -5,12 +5,13 @@
 clear, clc;
 
 %%%%%%%%%%%%%%%%%%%%%%%% Adjustments
-SIG2NOISE_RATIO = 0; % decrease to add more noise
+SIG2NOISE_RATIO = 1; % decrease to add more noise
 INTEGRAL_ITERATIONS = 7; %increase to increase the effect of the low pass filter
 SAMPLE_RATE_MULT = 2; % default rate is 10 samples per period
-PHI_ADJUST = 3; %must do some extra stuff to it to turn it into a cos wave
-PHI_INIT = PHI_ADJUST - 5;   % this number * pi/2
+PHI_ADJUST = 5; %must do some extra stuff to it to turn it into a cos wave
+PHI_INIT = ((0-PHI_ADJUST)+2)-5;   % this number * pi/2
 START_PHI = (pi/(5*SAMPLE_RATE_MULT)) * PHI_INIT; %used to initialize 
+STREAM_SAMPLES = 2010; %will eventually auto detect this
 
 SAMPLES = 2000; % amount of samples to use
 EXTRA_SAMPLES = (5*SAMPLE_RATE_MULT) - (5+PHI_INIT); %used for phase offset
@@ -22,6 +23,13 @@ EXTRA_SAMPLES = (5*SAMPLE_RATE_MULT) - (5+PHI_INIT); %used for phase offset
 cw = [1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0 1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 1 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0 1 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0 1 1 1 1 1 1 1 1 1 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 0]; % 500
 
 BITS = length(cw);
+
+%%%%% Output Bit Creation Variables %%%%%%%%%%%%%%%%%%%%%
+EARLY_LATE_WIDTH = 3;
+
+pSamp = 5;
+eSamp = 5 - EARLY_LATE_WIDTH;
+lSamp = 5 + EARLY_LATE_WIDTH;
 
 
 % -----------------------INPUT SIGNAL------------------------------------
@@ -62,15 +70,21 @@ z = cwWave;
 WaveLen = length(cwWave);
 SampLen = length(cwSamp);
 
-input = cwWave.*cwSamp;
-input_clean = input;
+%input = cwWave.*cwSamp;
+%input_clean = input;
 
-input = awgn(input, SIG2NOISE_RATIO);
-Mag_Noise = 1/db2mag((SIG2NOISE_RATIO))
+%input = awgn(input, SIG2NOISE_RATIO);
+Mag_Noise = 1/db2mag((SIG2NOISE_RATIO));
 
 
 s1 = zeros(SAMPLES);
 s2 = zeros(SAMPLES);
+
+
+%%%%%File I/O stuff
+filename='data.txt';
+fileID=fopen(filename, 'r');%open file
+
 
 %%build cosin and sin waves
 
@@ -112,9 +126,9 @@ previous_error = 0;
 integral = 0;
 derivative = 0;
 output = 0;
-Ki = 4000000;   % divided by 1.024 Million (dt)
-Kd = .00000002; % multiplied by 1.024 Million (dt)
-Kp = 2;
+Ki = 3000000;   % divided by 1.024 Million (dt)
+Kd = .0000000001; % multiplied by 1.024 Million (dt)
+Kp = .0000002;
 dt = 1/(SAMPLE_FREQUENCY*SAMPLE_RATE_MULT);
 
 %phase variable
@@ -123,9 +137,18 @@ phi = 0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%MAIN LOOP
 % the range is weird because we need to make room for the phase offset
 % for inc = (ceil(SAMPLES / 10):SAMPLES - ceil(SAMPLES / 10))
-for inc = (20*SAMPLE_RATE_MULT:SAMPLES - (20*SAMPLE_RATE_MULT))    
-    
+% for inc = (20*SAMPLE_RATE_MULT:SAMPLES - (20*SAMPLE_RATE_MULT)) 
+
+for i = (1:EXTRA_SAMPLES)
+   x=fscanf(fileID,'%f',1);
    
+end
+
+
+for inc = (30:STREAM_SAMPLES)
+    
+   %Read in data from ADC
+   input(inc)=fscanf(fileID,'%f',1);
 % -----------------------LOOP FILTER (CONTROL LOOP)-----------------------
 %PID controller
 
@@ -143,7 +166,7 @@ for inc = (20*SAMPLE_RATE_MULT:SAMPLES - (20*SAMPLE_RATE_MULT))
     
     pidY1 = y1(inc-1);    
     pidY2 = y2(inc-1);
-    error = pidY1*pidY2;
+    error = pidY1*pidY2*2;
     
     errors(inc) = error;
     integral = integral + (error * dt);
@@ -151,6 +174,10 @@ for inc = (20*SAMPLE_RATE_MULT:SAMPLES - (20*SAMPLE_RATE_MULT))
     output = (Kp*error + Ki*integral + Kd*derivative);
     previous_error = error;
     phi = round(output);
+    
+    
+    
+    outputs(inc) = output;
 %     if abs(error) > .1
 %         phi = round(output);        
 %     end
@@ -183,8 +210,12 @@ for inc = (20*SAMPLE_RATE_MULT:SAMPLES - (20*SAMPLE_RATE_MULT))
     %%set new phi to waves 
 
     
-    sinArray = input(inc)*sinWave(inc+phi);
-    cosArray = input(inc)*cosWave(inc+phi);    
+%     sinArray = input(inc)*sinWave(inc+phi);
+%     cosArray = input(inc)*cosWave(inc+phi); 
+    sinArray = input(inc)*sinWave(mod(inc, 20)+phi+210);
+    cosArray = input(inc)*cosWave(mod(inc, 20)+phi+210);
+    
+    
     
     sinElement = sinArray(1);
     cosElement = cosArray(1);
@@ -213,9 +244,36 @@ for inc = (20*SAMPLE_RATE_MULT:SAMPLES - (20*SAMPLE_RATE_MULT))
         y2(inc) = y2(inc) / INTEGRAL_ITERATIONS;
     end 
     bit1(inc) = sign(y1(inc));
-end
+    
+    
+    
 
-% -----------------------XOR With Gold Codes-------------------------------
+% -----------------------Output Bit Creation------------------------------------   
+%This block will take which sample the early late detector wants and take
+%the sign of it to send as a bit to the early, late, and punctual xor 
+%shift registers.
+    y = inc;
+    x = mod(inc, (5 * SAMPLE_RATE_MULT));
+    z = (phi + EARLY_LATE_WIDTH);
+    
+    %there is a problem with phi changing at the same time as when the
+    %increment gets to the correct value. For now phi gets assigned to
+    %phase to make sure that we capture the bit
+    if(mod(inc, (5 * SAMPLE_RATE_MULT)) == 0)
+        phase = phi;
+    end
+   
+    if(mod(inc, (5 * SAMPLE_RATE_MULT)) == (phase + EARLY_LATE_WIDTH))
+        next_curr_samp = inc
+        early_bit = sign(y1(inc - phase - EARLY_LATE_WIDTH));
+        prompt_bit = sign(y1(inc - phase))
+        late_bit = sign(y1(inc));
+    end 
+    
+    
+    if(curr_samp != next_curr_samp)
+        %shift reg
+end
 
 
 
@@ -224,19 +282,21 @@ end
 % -----------------------PLOTS------------------------------------
 subplot(2,2,1)
 %figure(1)
-stem(input_clean(1701:1850));
+%stem(input_clean(1701:1850));
+stem(input(1:400));
 title('Ideal Input');
 xlabel('time in sample intervals');
 ylabel('Amplitude');
 subplot(2,2,2);
 %figure(2)
-stem(input(1701:1850));
-title('The input to our receiver');
+stem(input(1:1850));
+title('Input with Noise Added');
 xlabel('time in sample intervals');
 ylabel('Amplitude');
 subplot(2,2,3);
 %figure(3)
-stem(y1(1701:1850));
+%stem(y1(1701:1850));
+stem(y1(1:400));
 hold on;
 plot(bit1(1701:1850));
 hold off;
@@ -246,7 +306,9 @@ ylabel('Amplitude');
 subplot(2,2,4);
 plot(phis(1:length(phis)-((20*SAMPLE_RATE_MULT))))
 hold on;
-plot(errors(1:length(phis)-((20*SAMPLE_RATE_MULT))));
+plot(errors(1:length(phis)-((20*SAMPLE_RATE_MULT))))
+hold on;
+plot(outputs(1:length(phis)-((20*SAMPLE_RATE_MULT))))
 hold off;
 title('Phase of the System');
 xlabel('time in sample intervals');
@@ -258,8 +320,7 @@ final_phi = phis(length(phis)-((20*SAMPLE_RATE_MULT))) % * pi/5
 
 
 
-
-
+fclose(fileID);
 
  
  
