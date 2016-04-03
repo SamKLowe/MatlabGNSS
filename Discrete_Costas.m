@@ -4,18 +4,16 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clear, clc;
 
-
 %%% Adjustment Constants
 SAMPLE_FREQUENCY = 10230000;
 SAMPLE_RATE_MULT = 2; % default rate is 5 samples per period
-
 
 %%%%%Open input file snr3/snr100
 filename='snr100.txt';
 
 %Signal Generation Constants
 SIG2NOISE_RATIO = 7; % decrease to add more noise
-INTEGRAL_ITERATIONS = 7; %increase to increase the effect of the low pass filter
+INTEGRAL_ITERATIONS = 10; %increase to increase the effect of the low pass filter
 PHI_ADJUST = 3; %must do some extra stuff to it to turn it into a cos wave
 PHI_INIT = ((0-PHI_ADJUST)-1)-5;   % this number * pi/2 some weird math to line up right
 START_PHI = (pi/(5*SAMPLE_RATE_MULT)) * PHI_INIT; %used to initialize 
@@ -73,9 +71,6 @@ for k=(1:length(cw))
     end;
 end;
 
-
-
-
 %constructing the carrier wave using the dsp.SineWave function
 carrier = dsp.SineWave();
 carrier.Frequency = SAMPLE_FREQUENCY;
@@ -85,7 +80,6 @@ carrier.SamplesPerFrame = 5*SAMPLE_RATE_MULT*bits + EXTRA_SAMPLES;
 carrier.SampleRate = SAMPLE_FREQUENCY*SAMPLE_RATE_MULT*10;
 carrier.OutputDataType = 'single';
 cwWave = step(carrier);
-
 
 %constructing the message signal
 cwSamp = (cwSamp)';
@@ -102,7 +96,6 @@ s1 = zeros(SAMPLES);
 s2 = zeros(SAMPLES);
 
 fileID=fopen(filename, 'r');%open file
-
 
 %%build costas cosine and sine waves
 
@@ -131,7 +124,6 @@ corrected_flag = 0;
 y1 = zeros(SAMPLES);
 y2 = zeros(SAMPLES);
 
-
 %%%% PID Values
 
 setpoint = 0;
@@ -140,9 +132,10 @@ previous_error = 0;
 integral = 0;
 derivative = 0;
 output = 0;
-Ki = 3000000;   % divided by 1.024 Million (dt)
+Ki = 4000000;   % divided by 1.024 Million (dt)
 Kd = .0000000001; % multiplied by 1.024 Million (dt)
 Kp = .000000000002;
+% Kp = 2;
 dt = 1/(SAMPLE_FREQUENCY*SAMPLE_RATE_MULT);
 
 %phase variable
@@ -161,6 +154,9 @@ early_bit = 0;
 prompt_bit = 0;
 late_bit = 0;
 xoredmag=0;
+
+
+matchme=[1 1 1 1 1 1 1 1 1 1];
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%MAIN LOOP
 % the range is weird because we need to make room for the phase offset
@@ -200,7 +196,7 @@ for inc = (30:STREAM_SAMPLES)
     errors(inc) = error;
     integral = integral + (error * dt);
     derivative = (error - previous_error)/dt;
-    output = (Kp*error + Ki*integral + Kd*derivative);
+    output = (Kp*error + Ki*integral + 0*derivative);
     previous_error = error;
     phi = round(output);    
     
@@ -244,11 +240,7 @@ for inc = (30:STREAM_SAMPLES)
         end
         y1(inc) = y1(inc) / INTEGRAL_ITERATIONS;
         y2(inc) = y2(inc) / INTEGRAL_ITERATIONS;
-    end 
-    
-    
-    
-    
+    end    
 
 % -----------------------Output Bit Creation------------------------------------   
 %This block will take which sample the early late detector wants and take
@@ -274,40 +266,47 @@ for inc = (30:STREAM_SAMPLES)
     end 
     
     
-% -----------------------Xor block------------------------------------   
+% -----------------------Xor block------------------------------------ 
+
+%look up auto correlate function xcorr
 
     if(curr_samp ~= next_curr_samp)
-    curr_samp=next_curr_samp;
-    %shift reg
-    %for shiftindex = n+1:n+100%starting smaller
-    shift=[shift prompt_bit];%shift in 100 bits to test.
-    %end
-    %shift through previous 100 samples.
-    if length(shift)>lengthofgoldcode+1
-        for shiftindex=1:lengthofgoldcode                
-            if shift(length(shift)-shiftindex+1) ~= goldcode2(lengthofgoldcode-shiftindex+1)
-            %if (xor(shift(length(shift)-shiftindex+1), goldcode2(lengthofgoldcode-shiftindex+1)) == 1)
-                xoredbits(shiftindex)=1;
-            else
-                xoredbits(shiftindex)=-1;
+        curr_samp=next_curr_samp;
+        %shift reg
+        %for shiftindex = n+1:n+100%starting smaller
+        shift=[shift prompt_bit];%shift in 100 bits to test.
+        %end
+        %shift through previous 100 samples.
+        if length(shift)>lengthofgoldcode+1
+            for shiftindex=1:lengthofgoldcode                
+                if shift(length(shift)-shiftindex+1) ~= goldcode2(lengthofgoldcode-shiftindex+1)
+                %if (xor(shift(length(shift)-shiftindex+1), goldcode2(lengthofgoldcode-shiftindex+1)) == 1)
+                    xoredbits(shiftindex)=1;
+                else
+                    xoredbits(shiftindex)=-1;
+                end
+                %xoredbits(shiftindex) = xor(shift(length(shift)-shiftindex+1), goldcode2(lengthofgoldcode-shiftindex+1));
+                xoredmag = xoredmag+ xoredbits(shiftindex);
             end
-            %xoredbits(shiftindex) = xor(shift(length(shift)-shiftindex+1), goldcode2(lengthofgoldcode-shiftindex+1));
-            xoredmag = xoredmag+ xoredbits(shiftindex);
-        end
-        xoredgraph =[xoredgraph xoredmag];
-        xoredmag=0;
-     end
+            xoredgraph =[xoredgraph xoredmag];
+            xoredmag=0;
+         end
     end
-
+    
+    
+    
 end
 
 
+% -----------------------New Early Late------------------------------------
+
+    
 
 % -----------------------PLOTS------------------------------------
 subplot(2,2,1)
-%figure(1)
-%stem(input_clean(1701:1850));
-%stem(input(1:400));
+figure(1)
+stem(input_clean(1701:1850));
+stem(input(1:400));
 plot(xoredgraph);
 title('Xor Magnitude');
 xlabel('Chip Number');
@@ -321,7 +320,7 @@ ylabel('Amplitude');
 subplot(2,2,3);
 %figure(3)
 %stem(y1(1701:1850));
-stem(y1(300:900));
+stem(y1(250:350));
 title('Costas Output Waveform');
 xlabel('time in sample intervals');
 ylabel('Amplitude');
@@ -336,16 +335,10 @@ title('Phase/Error of the System');
 xlabel('time in sample intervals');
 ylabel('phi');
 
+
+
 % print out the final phase
 final_phi = phis(length(phis)-((20*SAMPLE_RATE_MULT))) % * pi/5
 
-
-
-
 fclose(fileID);
-
- 
- 
-
-
 
