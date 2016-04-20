@@ -9,7 +9,7 @@ SAMPLE_FREQUENCY = 10230000;
 SAMPLE_RATE_MULT = 2; % default rate is 5 samples per period
 
 %%%%%Open input file snr3/snr100
-filename='snr100.txt';
+filename='snr3.txt';
 
 %Signal Generation Constants
 SIG2NOISE_RATIO = 7; % decrease to add more noise
@@ -174,6 +174,8 @@ for inc = (30:STREAM_SAMPLES)
    %Read in data from ADC comment out if using code generated input
    input(inc)= fscanf(fileID,'%f',1);
    
+   
+  
 % -----------------------LOOP FILTER (CONTROL LOOP)-----------------------
 %PID controller
 
@@ -320,7 +322,7 @@ ylabel('Amplitude');
 subplot(2,2,3);
 %figure(3)
 %stem(y1(1701:1850));
-stem(y1(250:350));
+stem(s2(250:350));
 title('Costas Output Waveform');
 xlabel('time in sample intervals');
 ylabel('Amplitude');
